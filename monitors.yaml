@@ -1,12 +1,36 @@
+tags:
+  - name: network
+    color: "#059669"
+  - name: Docker
+    color: "#DB2777"
 monitors:
-  - type: ping
-    name: Docker 3 Test
-    hostname: 10.10.1.30
+  - type: group
+    name: "Docker Test Group"
     interval: 60
     retryInterval: 60
     maxretries: 3
     notificationIDList:
       "1": true
     tags:
-      - name: Docker
-        color: "#DB2777"
+      - Docker
+  - type: group
+    name: "Docker Test SubGroup"
+    interval: 60
+    retryInterval: 60
+    maxretries: 3
+    parent: "Docker Test Group"
+    notificationIDList:
+      "1": true
+    tags:
+      - Docker
+  - type: ping
+    name: Docker 3 Test
+    hostname: 10.10.1.30
+    interval: 60
+    retryInterval: 60
+    maxretries: 3
+    parent: "Docker Test SubGroup"
+    notificationIDList:
+      "1": true
+    tags: 
+      - Docker

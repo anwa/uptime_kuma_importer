@@ -17,11 +17,12 @@ def load_config(file_path):
     logging.info(f"Lade Konfigurationsdatei: {file_path}")
     with open(file_path, 'r') as file:
         if file_path.endswith('.json'):
-            return json.load(file)
+            config = json.load(file)
         elif file_path.endswith('.yaml') or file_path.endswith('.yml'):
-            return yaml.safe_load(file)['monitors']
+            config = yaml.safe_load(file)
         else:
             raise ValueError("Unsupported file format. Use JSON or YAML.")
+    return config.get('tags', []), config.get('monitors', [])
 
 def monitor_exists(api, monitor_name):
     """Prüfe, ob ein Monitor oder eine Gruppe mit dem angegebenen Namen existiert."""
@@ -37,17 +38,25 @@ def monitor_exists(api, monitor_name):
         logging.error(f"Fehler beim Abrufen der Monitore: {e}")
         return None
 
-def get_or_create_tag(api, tag_name, tag_color):
+def get_or_create_tag(api, tag_name, tag_color, existing_tag_ids):
     """Prüfe, ob ein Tag existiert, und erstelle ihn ggf."""
     try:
+        # Prüfe, ob der Tag bereits in der zentralen Liste erstellt wurde
+        if tag_name in existing_tag_ids:
+            logging.info(f"Tag '{tag_name}' bereits erstellt (ID: {existing_tag_ids[tag_name]})")
+            return existing_tag_ids[tag_name]
+        
+        # Tags in Uptime Kuma abrufen
         logging.info(f"Prüfe Tag: {tag_name}")
         existing_tags = api.get_tags()
         logging.debug(f"Bestehende Tags: {existing_tags}")
         for tag in existing_tags:
             if tag['name'] == tag_name:
                 logging.info(f"Tag '{tag_name}' existiert bereits (ID: {tag['id']})")
+                existing_tag_ids[tag_name] = tag['id']
                 return tag['id']
         
+        # Tag erstellen
         logging.info(f"Erstelle neuen Tag: {tag_name} mit Farbe {tag_color}")
         tag_result = api.add_tag(name=tag_name, color=tag_color)
         logging.debug(f"API-Antwort für Tag-Erstellung: {tag_result}")
@@ -56,6 +65,7 @@ def get_or_create_tag(api, tag_name, tag_color):
             logging.error(f"Tag '{tag_name}' konnte nicht erstellt werden: Keine ID in Antwort")
             return None
         logging.info(f"Tag '{tag_name}' erstellt (ID: {tag_id})")
+        existing_tag_ids[tag_name] = tag_id
         return tag_id
     except Exception as e:
         logging.error(f"Fehler beim Abrufen oder Erstellen des Tags '{tag_name}': {e}")
@@ -70,7 +80,7 @@ def add_monitor_tag(api, tag_id, monitor_id):
     except Exception as e:
         logging.error(f"Fehler beim Verknüpfen des Tags ID {tag_id} mit Monitor ID {monitor_id}: {e}")
 
-def add_monitor(api, monitor_config):
+def add_monitor(api, monitor_config, existing_tag_ids):
     """Füge einen Monitor oder eine Gruppe hinzu, falls sie nicht existiert."""
     try:
         monitor_name = monitor_config['name']
@@ -98,10 +108,13 @@ def add_monitor(api, monitor_config):
             logging.info(f"Monitor/Gruppe '{monitor_name}' erfolgreich hinzugefügt (ID: {monitor_id})")
 
             # Tags hinzufügen (falls vorhanden)
-            for tag in tags:
-                tag_name = tag['name']
-                tag_color = tag.get('color', '#000000')  # Standardfarbe
-                tag_id = get_or_create_tag(api, tag_name, tag_color)
+            for tag_name in tags:
+                tag_color = '#000000'  # Standardfarbe, falls nicht in tags-Sektion definiert
+                for tag_config in existing_tag_ids.get('_config_tags', []):
+                    if tag_config['name'] == tag_name:
+                        tag_color = tag_config.get('color', '#000000')
+                        break
+                tag_id = get_or_create_tag(api, tag_name, tag_color, existing_tag_ids)
                 if tag_id:
                     # Prüfe, ob der Tag bereits verknüpft ist
                     existing_monitor_tags = api.get_monitor(monitor_id).get('tags', [])
@@ -118,10 +131,10 @@ def add_monitor(api, monitor_config):
         return None
 
 def main():
-    """Hauptfunktion zum Importieren von Monitoren und Gruppen."""
+    """Hauptfunktion zum Importieren von Tags, Monitoren und Gruppen."""
     try:
         # Lade die Konfigurationsdatei
-        monitors = load_config(INPUT_FILE)
+        tags_config, monitors = load_config(INPUT_FILE)
 
         # Verbinde mit Uptime Kuma
         with UptimeKumaApi(API_URL) as api:
@@ -129,11 +142,22 @@ def main():
             api.login(USERNAME, PASSWORD)
             logging.info("Erfolgreich eingeloggt")
             
+            # Speichere Tag-IDs, um sie bei Monitoren wiederzuverwenden
+            existing_tag_ids = {'_config_tags': tags_config}  # Speichere die Tag-Konfiguration
+
+            # Erstelle alle Tags aus der tags-Sektion
+            for tag_config in tags_config:
+                tag_name = tag_config['name']
+                tag_color = tag_config.get('color', '#000000')
+                tag_id = get_or_create_tag(api, tag_name, tag_color, existing_tag_ids)
+                if not tag_id:
+                    logging.warning(f"Tag '{tag_name}' konnte nicht erstellt werden, wird bei Monitoren übersprungen")
+
             # Füge jeden Monitor oder jede Gruppe hinzu
             for monitor in monitors:
-                add_monitor(api, monitor)
+                add_monitor(api, monitor, existing_tag_ids)
                 
-        logging.info("Alle Monitore und Gruppen erfolgreich importiert.")
+        logging.info("Alle Tags, Monitore und Gruppen erfolgreich importiert.")
     except Exception as e:
         logging.error(f"Fehler: {e}")
 
