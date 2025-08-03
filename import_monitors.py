@@ -23,6 +23,20 @@ def load_config(file_path):
         else:
             raise ValueError("Unsupported file format. Use JSON or YAML.")
 
+def monitor_exists(api, monitor_name):
+    """Prüfe, ob ein Monitor mit dem angegebenen Namen existiert."""
+    try:
+        existing_monitors = api.get_monitors()
+        for monitor in existing_monitors:
+            if monitor['name'] == monitor_name:
+                logging.info(f"Monitor '{monitor_name}' existiert bereits (ID: {monitor['id']})")
+                return monitor['id']
+        logging.info(f"Monitor '{monitor_name}' existiert nicht")
+        return None
+    except Exception as e:
+        logging.error(f"Fehler beim Abrufen der Monitore: {e}")
+        return None
+
 def get_or_create_tag(api, tag_name, tag_color):
     """Prüfe, ob ein Tag existiert, und erstelle ihn ggf."""
     try:
@@ -55,30 +69,36 @@ def get_or_create_tag(api, tag_name, tag_color):
         return None
 
 def add_monitor(api, monitor_config):
-    """Füge einen Monitor hinzu."""
+    """Füge einen Monitor hinzu, falls er nicht existiert."""
     try:
-        # Entferne tags aus der Konfiguration, da sie separat behandelt werden
-        tags = monitor_config.pop('tags', [])
-        logging.info(f"Erstelle Monitor: {monitor_config['name']}")
-        result = api.add_monitor(**monitor_config)
-        monitor_id = result.get('monitorID')
-        logging.info(f"Monitor '{monitor_config['name']}' erfolgreich hinzugefügt (ID: {monitor_id})")
+        monitor_name = monitor_config['name']
+        # Prüfe, ob der Monitor bereits existiert
+        monitor_id = monitor_exists(api, monitor_name)
+        if monitor_id:
+            logging.info(f"Monitor '{monitor_name}' wird übersprungen, da er bereits existiert")
+        else:
+            # Entferne tags aus der Konfiguration, da sie separat behandelt werden
+            tags = monitor_config.pop('tags', [])
+            logging.info(f"Erstelle Monitor: {monitor_name}")
+            result = api.add_monitor(**monitor_config)
+            monitor_id = result.get('monitorID')
+            logging.info(f"Monitor '{monitor_name}' erfolgreich hinzugefügt (ID: {monitor_id})")
 
-        # Tags hinzufügen
-        for tag in tags:
-            tag_name = tag['name']
-            tag_color = tag.get('color', '#000000')  # Standardfarbe, falls nicht angegeben
-            tag_id = get_or_create_tag(api, tag_name, tag_color)
-            if tag_id:
-                try:
-                    logging.info(f"Verknüpfe Tag '{tag_name}' mit Monitor ID {monitor_id}")
-                    api.add_monitor_tag(tag_id=tag_id, monitor_id=monitor_id)
-                    logging.info(f"Tag '{tag_name}' mit Monitor '{monitor_config['name']}' verknüpft")
-                except Exception as e:
-                    logging.error(f"Fehler beim Verknüpfen des Tags '{tag_name}' mit Monitor '{monitor_config['name']}': {e}")
-            else:
-                logging.warning(f"Tag '{tag_name}' konnte nicht erstellt oder gefunden werden.")
-        return result
+            # Tags hinzufügen
+            for tag in tags:
+                tag_name = tag['name']
+                tag_color = tag.get('color', '#000000')  # Standardfarbe, falls nicht angegeben
+                tag_id = get_or_create_tag(api, tag_name, tag_color)
+                if tag_id:
+                    try:
+                        logging.info(f"Verknüpfe Tag '{tag_name}' mit Monitor ID {monitor_id}")
+                        api.add_monitor_tag(tag_id=tag_id, monitor_id=monitor_id)
+                        logging.info(f"Tag '{tag_name}' mit Monitor '{monitor_config['name']}' verknüpft")
+                    except Exception as e:
+                        logging.error(f"Fehler beim Verknüpfen des Tags '{tag_name}' mit Monitor '{monitor_config['name']}': {e}")
+                else:
+                    logging.warning(f"Tag '{tag_name}' konnte nicht erstellt oder gefunden werden.")
+            return result
     except Exception as e:
         logging.error(f"Fehler beim Hinzufügen des Monitors '{monitor_config.get('name', 'Unbekannt')}': {e}")
         return None
