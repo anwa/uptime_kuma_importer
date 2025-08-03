@@ -1,23 +1,12 @@
 monitors:
   - type: ping
-    name: Local Router
-    hostname: 192.168.1.1
+    name: Docker 3 Test
+    hostname: 10.10.1.30
     interval: 60
     retryInterval: 60
     maxretries: 3
     notificationIDList:
       "1": true
     tags:
-      - name: network
-        color: "#059669"
-  - type: ping
-    name: Server 1
-    hostname: 10.0.0.10
-    interval: 60
-    retryInterval: 60
-    maxretries: 3
-    notificationIDList:
-      "1": true
-    tags:
-      - name: servers
-        color: "#ff0000"
+      - name: Docker
+        color: "#DB2777"
