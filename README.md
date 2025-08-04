@@ -1,4 +1,4 @@
-# HA
+# Uptime Kuma Importer
 
 ## Setup
 
