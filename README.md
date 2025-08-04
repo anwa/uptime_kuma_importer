@@ -5,16 +5,15 @@
 1. Repository clonen:
 
 ```bash
-git clone https://github.com/anwa/ha.git
-cd HA
+git clone https://github.com/anwa/uptime_kuma_importer.git
+cd uptime_kuma_importer
 ```
 
 2. Virtuelle Umgebung erstellen und aktivieren:
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux
-.\venv\Scripts\activate   # Windows   
+py -m venv venv
+.\venv\Scripts\activate
 ```
 
 3. Bibliotheken installieren:
@@ -26,7 +25,7 @@ pip install -r requirements.txt
 4. Anwendung starten:
 
 ```bash
-python replace_unique_id.py
+py import.py
 ```
 ## Pflege der Requirements
 
@@ -53,6 +52,5 @@ pip install --upgrade paketname
 4. Alle Pakete auf die neuesten Versionen updaten
 
 ```bash
-pip install --upgrade -r requirements-linux.txt    # Linux
-pip install --upgrade -r requirements-windows.txt  # Windows
+pip install --upgrade -r requirements.txt
 ```
